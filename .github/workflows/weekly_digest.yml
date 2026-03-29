@@ -38,6 +38,13 @@ jobs:
           EMAIL_RECIPIENT_YIFAN: ${{ secrets.EMAIL_RECIPIENT_YIFAN }}
         run: python yifanxu.py
 
+      - name: Run tracker (haihuang)
+        env:
+          EMAIL_SENDER:            ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:          ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT_HAIHUANG: ${{ secrets.EMAIL_RECIPIENT_HAIHUANG }}
+        run: python haihuang.py
+
       - name: Commit updated seen_articles.json
         run: |
           git config user.name  "github-actions[bot]"
