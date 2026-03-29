@@ -60,12 +60,16 @@ CROSSREF_JOURNALS = [
 ]
 
 # ── 配置（从环境变量读取）────────────────────────────────────────────────────
-SEEN_FILE = Path("seen_haihuang.json")
-SMTP_HOST = "smtp.163.com"
-SMTP_PORT = 465
-SENDER    = os.environ["EMAIL_SENDER"]
-PASSWORD  = os.environ["EMAIL_PASSWORD"]
-RECIPIENT = os.environ["EMAIL_RECIPIENT_HAIHUANG"]
+SEEN_FILE        = Path("seen_haihuang.json")
+FAIL_COUNTS_FILE = Path("fail_counts_haihuang.json")
+SMTP_HOST        = "smtp.163.com"
+SMTP_PORT        = 465
+SENDER           = os.environ["EMAIL_SENDER"]
+PASSWORD         = os.environ["EMAIL_PASSWORD"]
+RECIPIENT        = os.environ["EMAIL_RECIPIENT_HAIHUANG"]
+ALERT_RECIPIENT  = os.environ.get("EMAIL_ALERT", "")
+FAIL_THRESHOLD   = 5
+SCRIPT_NAME      = "haihuang"
 
 TEST_MODE = "--test" in sys.argv
 
@@ -81,9 +85,19 @@ def save_seen(seen: set):
     SEEN_FILE.write_text(json.dumps(sorted(seen), indent=2, ensure_ascii=False))
 
 
+def load_fail_counts() -> dict:
+    if FAIL_COUNTS_FILE.exists():
+        return json.loads(FAIL_COUNTS_FILE.read_text())
+    return {}
+
+
+def save_fail_counts(counts: dict):
+    FAIL_COUNTS_FILE.write_text(json.dumps(counts, indent=2, ensure_ascii=False))
+
+
 # ── 抓取 RSS ──────────────────────────────────────────────────────────────────
-def fetch_rss(seen: set) -> dict:
-    results = {}
+def fetch_rss(seen: set) -> tuple:
+    results, errors = {}, {}
     for name, url in JOURNALS:
         try:
             feed = feedparser.parse(url)
@@ -116,13 +130,14 @@ def fetch_rss(seen: set) -> dict:
             else:
                 print(f"  {name}: 无新文章")
         except Exception as e:
+            errors[name] = str(e)
             print(f"  {name}: ERROR - {e}")
-    return results
+    return results, errors
 
 
 # ── 抓取 CrossRef ─────────────────────────────────────────────────────────────
-def fetch_crossref(seen: set) -> dict:
-    results = {}
+def fetch_crossref(seen: set) -> tuple:
+    results, errors = {}, {}
     from_date = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
     for name, issn in CROSSREF_JOURNALS:
         try:
@@ -164,8 +179,9 @@ def fetch_crossref(seen: set) -> dict:
             else:
                 print(f"  {name}: 无新文章 (CrossRef)")
         except Exception as e:
+            errors[name] = str(e)
             print(f"  {name}: ERROR (CrossRef) - {e}")
-    return results
+    return results, errors
 
 
 # ── 构建 HTML ─────────────────────────────────────────────────────────────────
@@ -225,17 +241,96 @@ def send_email(html: str, subject: str):
     print(f"邮件已发送至 {RECIPIENT}")
 
 
+# ── 发送告警邮件 ──────────────────────────────────────────────────────────────
+def send_alert(triggered: dict):
+    """triggered: {journal_name: (error_msg, fail_count)}"""
+    if not ALERT_RECIPIENT:
+        print("EMAIL_ALERT not configured, skipping alert.")
+        return
+    rows = ""
+    for name, (err_msg, count) in triggered.items():
+        rows += f"""
+          <tr>
+            <td style="padding:8px 12px; border-bottom:1px solid #fee2e2; font-weight:600;">{name}</td>
+            <td style="padding:8px 12px; border-bottom:1px solid #fee2e2; text-align:center;">{count}</td>
+            <td style="padding:8px 12px; border-bottom:1px solid #fee2e2; font-family:monospace;
+                       font-size:12px; color:#b91c1c; word-break:break-all;">{err_msg}</td>
+          </tr>"""
+    n = len(triggered)
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0; padding:0; background:#f8fafc; font-family:-apple-system, Arial, sans-serif;">
+  <div style="max-width:700px; margin:24px auto; background:#fff;
+              border-radius:8px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.08);">
+    <div style="background:#dc2626; padding:24px 32px;">
+      <h1 style="color:#fff; margin:0; font-size:20px;">Journal Tracker · RSS Alert</h1>
+      <p style="color:#fecaca; margin:6px 0 0; font-size:13px;">
+        脚本 <strong>{SCRIPT_NAME}</strong> 中有 {n} 个期刊已连续 {FAIL_THRESHOLD} 周抓取失败
+      </p>
+    </div>
+    <div style="padding:24px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0"
+             style="border-collapse:collapse; border:1px solid #fee2e2; border-radius:6px; overflow:hidden;">
+        <thead>
+          <tr style="background:#fef2f2;">
+            <th style="padding:8px 12px; text-align:left; font-size:13px; color:#991b1b; white-space:nowrap;">期刊</th>
+            <th style="padding:8px 12px; text-align:center; font-size:13px; color:#991b1b; white-space:nowrap;">连续失败周数</th>
+            <th style="padding:8px 12px; text-align:left; font-size:13px; color:#991b1b;">错误信息</th>
+          </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
+      <p style="margin:20px 0 0; font-size:13px; color:#475569; line-height:1.6;">
+        处理方式：前往 <strong>GitHub Actions</strong> 查看详细日志，确认 RSS 地址失效后
+        在 <code>{SCRIPT_NAME}.py</code> 中更新对应 URL 并提交。
+      </p>
+    </div>
+    <div style="padding:16px 32px; background:#f1f5f9; font-size:11px; color:#94a3b8;">
+      Generated by journal-tracker · GitHub Actions
+    </div>
+  </div>
+</body></html>"""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"[Journal Tracker · {SCRIPT_NAME}] {n} journal{'s' if n > 1 else ''} failing for {FAIL_THRESHOLD}+ weeks"
+    msg["From"]    = SENDER
+    msg["To"]      = ALERT_RECIPIENT
+    msg.attach(MIMEText(html, "html", "utf-8"))
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+        server.login(SENDER, PASSWORD)
+        server.sendmail(SENDER, [ALERT_RECIPIENT], msg.as_string())
+    print(f"告警邮件已发送至 {ALERT_RECIPIENT}: {list(triggered.keys())}")
+
+
 # ── 主流程 ────────────────────────────────────────────────────────────────────
 def main():
     week_str = datetime.now(timezone.utc).strftime("Week of %Y-%m-%d")
     mode_label = "【测试模式·全量】" if TEST_MODE else "【增量模式】"
     print(f"=== haihuang tracker · {week_str} · {mode_label} ===")
 
-    seen = set() if TEST_MODE else load_seen()
+    seen        = set() if TEST_MODE else load_seen()
+    fail_counts = load_fail_counts()
     print(f"已记录文章数: {len(seen)}")
 
-    articles = fetch_rss(seen)
-    articles.update(fetch_crossref(seen))
+    articles, rss_errors    = fetch_rss(seen)
+    cr_results, cr_errors   = fetch_crossref(seen)
+    articles.update(cr_results)
+    all_errors = {**rss_errors, **cr_errors}
+
+    # 测试模式不更新失败计数，不发告警
+    if not TEST_MODE:
+        all_names = [n for n, _ in JOURNALS] + [n for n, _ in CROSSREF_JOURNALS]
+        for name in all_names:
+            fail_counts[name] = fail_counts.get(name, 0) + 1 if name in all_errors else 0
+        save_fail_counts(fail_counts)
+
+        triggered = {
+            name: (all_errors[name], fail_counts[name])
+            for name in all_errors
+            if fail_counts[name] == FAIL_THRESHOLD
+        }
+        if triggered:
+            send_alert(triggered)
+
     total = sum(len(v) for v in articles.values())
     print(f"本次获取文章: {total} 篇（共 {len(articles)} 个期刊有更新）")
 

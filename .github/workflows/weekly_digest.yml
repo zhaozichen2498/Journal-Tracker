@@ -29,6 +29,7 @@ jobs:
           EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          EMAIL_ALERT:     ${{ secrets.EMAIL_ALERT }}
         run: python journal_tracker.py
 
       - name: Run tracker (yifanxu)
@@ -36,26 +37,31 @@ jobs:
           EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT_YIFAN: ${{ secrets.EMAIL_RECIPIENT_YIFAN }}
+          EMAIL_ALERT:           ${{ secrets.EMAIL_ALERT }}
         run: python yifanxu.py
 
       - name: Run tracker (haihuang)
         env:
-          EMAIL_SENDER:            ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:          ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_SENDER:             ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:           ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT_HAIHUANG: ${{ secrets.EMAIL_RECIPIENT_HAIHUANG }}
+          EMAIL_ALERT:              ${{ secrets.EMAIL_ALERT }}
         run: python haihuang.py
 
       - name: Run tracker (jiahuitan)
         env:
-          EMAIL_SENDER:               ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:             ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECIPIENT_JIAHUITAN:  ${{ secrets.EMAIL_RECIPIENT_JIAHUITAN }}
+          EMAIL_SENDER:              ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:            ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT_JIAHUITAN: ${{ secrets.EMAIL_RECIPIENT_JIAHUITAN }}
+          EMAIL_ALERT:               ${{ secrets.EMAIL_ALERT }}
         run: python jiahuitan.py
 
-      - name: Commit updated seen_articles.json
+      - name: Commit updated cache files
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add seen_articles.json seen_yifanxu.json seen_haihuang.json seen_jiahuitan.json
+          git add seen_articles.json seen_yifanxu.json seen_haihuang.json seen_jiahuitan.json \
+                  fail_counts_journal_tracker.json fail_counts_yifanxu.json \
+                  fail_counts_haihuang.json fail_counts_jiahuitan.json
           git diff --cached --quiet || git commit -m "chore: update seen articles [skip ci]"
           git push
