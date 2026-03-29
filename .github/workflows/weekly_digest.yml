@@ -24,12 +24,19 @@ jobs:
       - name: Install dependencies
         run: pip install feedparser
 
-      - name: Run tracker
+      - name: Run tracker (main)
         env:
           EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
         run: python fetch_and_notify.py
+
+      - name: Run tracker (yifanxu)
+        env:
+          EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT_YIFAN: ${{ secrets.EMAIL_RECIPIENT_YIFAN }}
+        run: python yifanxu.py
 
       - name: Commit updated seen_articles.json
         run: |
