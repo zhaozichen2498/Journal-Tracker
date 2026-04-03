@@ -2,24 +2,15 @@ name: Weekly Journal Digest
 
 on:
   schedule:
-    # 每周一 UTC 01:00（北京/大阪时间 09:00）
     - cron: "0 1 * * 1"
   workflow_dispatch:
     inputs:
       run_main:
-        description: "Run journal_tracker.py (main)"
+        description: "Run journal_tracker.py (主程序)"
         type: boolean
         default: true
-      run_yifanxu:
-        description: "Run yifanxu.py"
-        type: boolean
-        default: true
-      run_haihuang:
-        description: "Run haihuang.py"
-        type: boolean
-        default: true
-      run_jiahuitan:
-        description: "Run jiahuitan.py"
+      run_zhaozichen:
+        description: "Run zhaozichen.py (你的子程序)"
         type: boolean
         default: true
 
@@ -50,39 +41,20 @@ jobs:
           EMAIL_ALERT:     ${{ secrets.EMAIL_ALERT }}
         run: python journal_tracker.py
 
-      - name: Run tracker (yifanxu)
-        if: github.event_name == 'schedule' || inputs.run_yifanxu == true
+      - name: Run tracker (zhaozichen)
+        if: github.event_name == 'schedule' || inputs.run_zhaozichen == true
         env:
-          EMAIL_SENDER:          ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:        ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECIPIENT_YIFAN: ${{ secrets.EMAIL_RECIPIENT_YIFAN }}
-          EMAIL_ALERT:           ${{ secrets.EMAIL_ALERT }}
-        run: python yifanxu.py
-
-      - name: Run tracker (haihuang)
-        if: github.event_name == 'schedule' || inputs.run_haihuang == true
-        env:
-          EMAIL_SENDER:             ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:           ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECIPIENT_HAIHUANG: ${{ secrets.EMAIL_RECIPIENT_HAIHUANG }}
-          EMAIL_ALERT:              ${{ secrets.EMAIL_ALERT }}
-        run: python haihuang.py
-
-      - name: Run tracker (jiahuitan)
-        if: github.event_name == 'schedule' || inputs.run_jiahuitan == true
-        env:
-          EMAIL_SENDER:              ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:            ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_RECIPIENT_JIAHUITAN: ${{ secrets.EMAIL_RECIPIENT_JIAHUITAN }}
-          EMAIL_ALERT:               ${{ secrets.EMAIL_ALERT }}
-        run: python jiahuitan.py
+          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          EMAIL_ALERT:     ${{ secrets.EMAIL_ALERT }}
+        run: python zhaozichen.py
 
       - name: Commit updated cache files
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add seen_articles.json seen_yifanxu.json seen_haihuang.json seen_jiahuitan.json \
-                  fail_counts_journal_tracker.json fail_counts_yifanxu.json \
-                  fail_counts_haihuang.json fail_counts_jiahuitan.json
+          git add seen_articles.json seen_zhaozichen.json \
+                  fail_counts_journal_tracker.json fail_counts_zhaozichen.json
           git diff --cached --quiet || git commit -m "chore: update seen articles [skip ci]"
           git push
